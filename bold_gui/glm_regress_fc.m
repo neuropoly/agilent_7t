@@ -1,0 +1,125 @@
+function handles = glm_regress_fc(pathNii,handles)
+%Starting with spatially filtered BOLD data
+B = handles.AllData.B;
+Nt = handles.AllData.Nt;
+pathRegress = handles.AllData.pathRegress;
+TR = handles.AllData.TR;
+HPF = 1/0.008;
+add_movement_regressors = 1; 
+scaling_GLM = 1;
+if scaling_GLM 
+    scaling  = 'Scaling';
+else
+    scaling = 'None';
+end 
+scans = {};
+for i0=1:Nt
+    scans = [scans; fullfile(pathNii,['srvolume' gen_num_str(i0,3) '.nii,1'])];
+end
+all_confounds = [];
+if add_movement_regressors
+    mvt_params = fullfile(pathNii,['rp_volume001.txt']);
+    rp = load(mvt_params);
+    all_confounds = rp;
+end
+%Regressors for bad scans
+removeBadScans = get(handles.removeBadScans,'Value');
+if removeBadScans
+    %rp = load(mvt_params);
+    Bs = [];
+    BadScans = handles.AllData.BadScans;
+    for j0=1:length(BadScans)
+        if BadScans(j0) > 0 && BadScans(j0) <= Nt
+            tmp = [zeros(BadScans(j0)-1,1); 1; zeros(Nt-BadScans(j0),1)];
+            Bs = [Bs tmp];
+        end
+    end
+    all_confounds = [all_confounds Bs];
+end
+add_confound_regressors = 1;
+if add_confound_regressors
+    %Add confound regressors
+    if isfield(handles.AllData,'confounds')
+        cf = handles.AllData.confounds;
+        cf_radius = 2;
+        cf_param = [];
+        cf_names = {};
+        for i0=1:length(cf)
+            cf_tmp = [];
+            for x0 = -cf_radius:cf_radius
+                for y0 = -cf_radius:cf_radius
+                    cfX = round(cf{i0}.pos(1)) + x0;
+                    cfY = round(cf{i0}.pos(2)) + y0;
+                    cf_tmp = [cf_tmp squeeze(B(cfX,cfY,:,cf{i0}.slice))];
+                end
+            end
+            cf_tmp = mean(cf_tmp,2);
+            cf_param = [cf_param cf_tmp];
+            cf_names = [cf_names cf{i0}.name];
+        end
+    end
+    all_confounds = [all_confounds cf_param];
+end
+if ~isempty(all_confounds)    
+    all_confounds_params_file = [handles.AllData.pathRegressRoot '_' handles.AllData.Regress_time '.txt'];
+    save(all_confounds_params_file,'all_confounds','-ascii');
+end
+if ~exist(pathRegress,'dir'), mkdir(pathRegress); end
+%Call SPM GLM
+matlabbatch{1}.spm.stats.fmri_spec.dir = {pathRegress};
+matlabbatch{1}.spm.stats.fmri_spec.timing.units = 'secs';
+matlabbatch{1}.spm.stats.fmri_spec.timing.RT = TR;
+matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t = 16;
+matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0 = 1;
+matlabbatch{1}.spm.stats.fmri_spec.sess.scans = scans;
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond.name = 'Dummy';
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond.onset = 0; %Dummy onset at time 0
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond.duration = 0;
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond.tmod = 0;
+matlabbatch{1}.spm.stats.fmri_spec.sess.cond.pmod = struct('name', {}, 'param', {}, 'poly', {});
+matlabbatch{1}.spm.stats.fmri_spec.sess.multi = {''};
+matlabbatch{1}.spm.stats.fmri_spec.sess.regress = struct('name', {}, 'val', {});
+if isempty(all_confounds) 
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg = {''};
+else
+    matlabbatch{1}.spm.stats.fmri_spec.sess.multi_reg = {all_confounds_params_file}; 
+end
+matlabbatch{1}.spm.stats.fmri_spec.sess.hpf = HPF;
+matlabbatch{1}.spm.stats.fmri_spec.fact = struct('name', {}, 'levels', {});
+matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs = [0 0];
+matlabbatch{1}.spm.stats.fmri_spec.volt = 1;
+matlabbatch{1}.spm.stats.fmri_spec.global = scaling; %'None';
+matlabbatch{1}.spm.stats.fmri_spec.mask = {''};
+matlabbatch{1}.spm.stats.fmri_spec.cvi = 'AR(1)';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1) = cfg_dep;
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).tname = 'Select SPM.mat';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).name = 'filter';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).value = 'mat';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).name = 'strtype';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).value = 'e';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).sname = 'fMRI model specification: SPM.mat File';
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).src_exbranch = substruct('.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1});
+matlabbatch{2}.spm.stats.fmri_est.spmmat(1).src_output = substruct('.','spmmat');
+matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+warning('off')
+spm_jobman('run',matlabbatch);
+warning('on')
+
+%Load SPM
+fSPM = fullfile(pathRegress,'SPM.mat');
+load(fSPM);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Step 1d: compute the regressed images
+% residuals (non-whitened)
+B0 = handles.AllData.B0;
+[Nx Ny Nt Nz] = size(B0);
+y = permute(B0,[1 2 4 3]);
+y = reshape(y,[],Nt);
+R   = spm_sp('r',SPM.xX.xKXs,y')';
+R = reshape(R,[Nx Ny Nz Nt]);
+R = permute(R,[1 2 4 3]);
+handles.AllData.R = R;
+handles.AllData.cf_names = cf_names;
+handles.AllData.cf_param = cf_param;
+handles.AllData.Bs = Bs;
+handles.AllData.rp = rp;
