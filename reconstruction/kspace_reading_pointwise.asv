@@ -1,0 +1,165 @@
+%% Read with aedes
+clear all; close all;
+% fid_file = '/Volumes/hd2_local/users_local/jfpp/data/xp_2014/s_20140411_PhantomJF0101/epip_mouse_head_64x6401.fid';
+% fid_file = '/Volumes/data_shared/montreal_icm/20131122_exvivo_spinalcord_01/epip03.fid';
+% fid_file = '/Volumes/hd2_local/users_local/jfpp/data/xp_2014/s_20140207_MouseBold0601/epip_mouse_head_0_5iso01.fid';
+% fid_file= '/home/django/jfpp/Desktop/s_20140911_PhantomJF03/epip_mouse_head_64x128_02.fid';
+fid_file= 'C:\Users\Jean François\Documents\Maîtrise\s_20140926_JF_BOLD01\epip_mouse_head_jf_32_01.fid';
+
+[pathstr, name, ext] = fileparts(fid_file);
+fdf_folder= [pathstr filesep name '.img'];
+
+datafid=aedes_readfid(fid_file,'Return',2);
+ks=(datafid.KSPACE);
+acq_order = datafid.PROCPAR.image;
+
+fdf_files=dir([fdf_folder '/s*.fdf']);
+input={fdf_files(:).name};
+if iscell(input)
+    nb_files = size(input,2);
+else
+    nb_files = 1;
+end
+
+for k = 1:nb_files
+    if nb_files == 1
+        input_file = fullfile(fdf_folder,input{1});
+    else
+        input_file = fullfile(fdf_folder,input{k});
+    end
+    patate = aedes_readfdf(input_file);
+    data_fdf(:,:,k) = patate.FTDATA;
+end
+
+%% Reshape
+nx=64; knx=nx*2; % Double sampling in the frequency direction
+ny=32; kny=ny+2; % 2 additionnal column in the phase direction. For reconstruction purpose?
+knz=size(ks,3); nz=knz;
+knt=size(ks,2); nt=(knt-2)/2;
+% nz=16; knz=nz; % Same
+% nt=20; knt=nt*2+2; % 2 reference scans at the begin + 1 navigation scan in between each scan
+ksraw=reshape(ks,knx,kny,knt,knz);
+ksraw=permute(ksraw,[1 2 4 3]); % Replace matrix in x,y,z,t order
+data_fdf=reshape(data_fdf,nx,ny,nt,nz);
+data_fdf=permute(data_fdf,[1 2 4 3]);
+data_fdf=data_fdf(:,ny:-1:1,:,:);
+
+%% Definition of the data sets
+Rplus = ksraw(:,:,:,acq_order==0);      % Non-phase encoded reference scan (0)
+Eplus = ksraw(:,:,:,acq_order==1);      % Epi data (1)
+regularize=0;
+
+%% 1. Collect a reference scan, R+, with phase encode  gradient off 
+
+%% 2. Reverse the even echoes
+Rplus(1:knx,2:2:end,:,:) = Rplus(knx:-1:1,2:2:end,:,:);
+
+%% 3. FT along the read dimension 
+for z=1:knz
+    for y=1:kny
+        fftRplus(:,y,z) = fftshift(ifft(Rplus(:,y,z)));
+    end
+end
+z=4;
+figure('Name','Rplus')
+subplot(1,2,1); imagesc(abs(fftRplus(:,:,z))); title('fftRplus')
+subplot(1,2,2); imagesc(angle(fftRplus(:,:,z))); title('angle of fftRplus')
+
+%% 4. Determine the phase, P+, of each data point 
+% mean_fftRplus = mean(abs(fftRplus(:)));
+% fftRplus(abs(fftRplus)<mean_fftRplus) = 0;
+Pplus = angle(fftRplus);  
+if regularize
+    hsize = 5;
+    to_reg = [1:60 81:knx];
+    gauss = fspecial('gaussian',[hsize 1],0.5);
+    gauss_2D = gauss;
+%     gauss_2D = zeros(hsize*2-1,hsize);
+%     gauss_2D(1:2:end,:) = gauss;
+    Pplusodd = zeros(size(Pplus));
+    Pplusodd(:,1:2:end-1,:,:) = Pplus(:,1:2:end-1,:,:);
+    Pplusodd(to_reg,:) = imfilter(Pplusodd(to_reg,:),gauss_2D);
+    Ppluseven = zeros(size(Pplus));
+    Ppluseven(:,2:2:end,:,:) = Pplus(:,2:2:end,:,:);
+    Ppluseven(to_reg,:) = imfilter(Ppluseven(to_reg,:),gauss_2D);
+    Pplusreg = Pplusodd+Ppluseven;
+    figure('Name','Phase regularization')
+    subplot(1,2,1); imagesc(Pplus(:,:,z)); title('Raw phase')
+    subplot(1,2,2); imagesc(Pplusreg(:,:,z)); title('Regularized phase')
+    Pplus = Pplusreg;
+end
+
+
+%% 5. Collect the EPI data, E+ 
+
+%% 6. Reverse the even echoes
+Eplus(1:knx,2:2:end,:,:) = Eplus(knx:-1:1,2:2:end,:,:);
+
+%% 7. FT the EPI data along the read dimension 
+for t=1:nt
+    for z=1:knz
+        for y=1:kny
+            fftEplus(:,y,z,t) = fftshift(ifft(Eplus(:,y,z,t)));
+        end
+    end
+end
+t=nt; z=4;
+figure('Name','Eplus')
+subplot(1,2,1); imagesc(abs(Eplus(:,:,z,t))); title('Eplus')
+subplot(1,2,2); imagesc(abs(fftEplus(:,:,z,t))); title('fftEplus')
+
+%% 8. Subtract the reference phase obtained in (4) 
+Estarplusphase = angle(fftEplus) - repmat(Pplus,[1 1 1 size(fftEplus,4)]);
+a = real(abs(fftEplus).*cos(Estarplusphase));
+b = real(abs(fftEplus).*sin(Estarplusphase));
+Estarplus = complex(a,b);
+z=4; t=4;
+figure
+subplot(1,2,1); imagesc(abs(fftEplus(:,:,z,t))); title('Eplus') 
+subplot(1,2,2); imagesc(abs(Estarplus(:,:,z,t))); title('Estarplus') 
+
+%% Set the background phase to 0
+% mean_Estarplus = mean(abs(Estarplus(:)));
+% EstarPlus(abs(Estarplus)<mean_Estarplus) = 0;
+
+%% 9. FT along the phase dimension 
+for t=1:nt
+    for z=1:knz
+        for x=1:knx
+            fftE(x,:,z,t) = fftshift(ifft(Estarplus(x,3:end,z,t)));
+        end
+    end
+end
+
+%% 10. Calculate the magnitude of the image for display 
+t=4; z=4;
+figure('Name','E')
+subplot(1,2,1); imagesc(abs(fftshift(Estarplus(:,:,z,t)))); title('Estarplus')
+subplot(1,2,2); imagesc(abs(fftE(:,:,z,t))); title('fftE')
+colormap gray
+
+%% Download .nii and .dcm to compare
+% nii_file = '/Volumes/data_shared/montreal_icm/20131122_exvivo_spinalcord_01/epip03.nii/volume0004.nii';
+% dcm_file = '/Volumes/data_shared/montreal_icm/20131122_exvivo_spinalcord_01/epip03.dcm/slice008image004echo001.dcm';
+% z=4; t=4;
+% datanii = aedes_read_nifti(nii_file);
+% nii = datanii.FTDATA(:,:,z);
+% nii = nii/max(nii(:));
+% dcm = double(dicomread(dcm_file));
+% dcm = dcm/max(dcm(:));
+% figure('Name','Fid vs Nifti')
+% subplot(1,3,1); imagesc(abs(fftE(:,:,z,t))); title('fid')
+% subplot(1,3,2); imagesc(nii(:,:)); title('nii')
+% subplot(1,3,3); imagesc(dcm(:,:)); title('dcm')
+% colormap gray
+% diff = nii-dcm;
+
+%% Display data_fdf and rspace
+t=4;
+figure(5)
+data_fid = abs(fftE(knx/4:3*knx/4,[ny/2:-1:1 ny:-1:ny/2+1],:,:));
+for z=2:5
+    subplot(2,4,(z-1)); imagesc(data_fdf(:,:,z,t)); axis image; title(['fdf z=' num2str(z)],'fontsize',12);
+    subplot(2,4,(z+3)); imagesc(data_fid(:,:,z,t)); axis image; title(['xcorr z=' num2str(z)],'fontsize',12);
+    colormap gray
+end

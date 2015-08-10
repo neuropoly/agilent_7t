@@ -1,0 +1,152 @@
+%% Read with aedes
+clear all; close all;
+% fid_file = '/Volumes/hd2_local/users_local/jfpp/data/xp_2014/s_20140411_PhantomJF0101/epip_mouse_head_64x6401.fid';
+% fid_file = '/Volumes/data_shared/montreal_icm/20131122_exvivo_spinalcord_01/epip03.fid';
+% fid_file = '/Volumes/hd2_local/users_local/jfpp/data/xp_2014/s_20140207_MouseBold0601/epip_mouse_head_0_5iso01.fid';
+% fid_file= '/home/django/jfpp/Desktop/s_20140911_PhantomJF03/epip_mouse_head_64x128_02.fid';
+fid_file= 'C:\Users\Jean François\Documents\Maîtrise\s_20140926_JF_BOLD01\epip_mouse_head_jf_32_01.fid';
+
+[pathstr, name, ext] = fileparts(fid_file);
+fdf_folder= [pathstr filesep name '.img'];
+
+datafid=aedes_readfid(fid_file,'Return',2);
+ks=(datafid.KSPACE);
+acq_order = datafid.PROCPAR.image;
+
+fdf_files=dir([fdf_folder '/s*.fdf']);
+input={fdf_files(:).name};
+if iscell(input)
+    nb_files = size(input,2);
+else
+    nb_files = 1;
+end
+
+for k = 1:nb_files
+    if nb_files == 1
+        input_file = fullfile(fdf_folder,input{1});
+    else
+        input_file = fullfile(fdf_folder,input{k});
+    end
+    patate = aedes_readfdf(input_file);
+    data_fdf(:,:,k) = patate.FTDATA;
+end
+
+%% Reshape
+nx=64; knx=nx*2; % Double sampling in the frequency direction
+ny=32; kny=ny+2; % 2 additionnal column in the phase direction. For reconstruction purpose?
+knz=size(ks,3); nz=knz;
+knt=size(ks,2); nt=(knt-2)/2;
+% nz=16; knz=nz; % Same
+% nt=20; knt=nt*2+2; % 2 reference scans at the begin + 1 navigation scan in between each scan
+ksraw=reshape(ks,knx,kny,knt,knz);
+ksraw=permute(ksraw,[1 2 4 3]); % Replace matrix in x,y,z,t order
+
+%% Definition of the data sets
+Rplus = ksraw(:,:,:,acq_order==0);         % Non-phase encoded reference scan (0)
+Rminus = ksraw(:,:,:,acq_order==-2);        % Non-phase encoded reference scan with the read gradient polarity reversed (-2)
+Eplus = ksraw(:,:,:,acq_order==1); % Epi data (1)
+Eminus = ksraw(:,:,:,acq_order==-1);  % Phase-encoded reference scan with the read gradient polarity reversed (-1)
+
+%% 1. Reverse the even echoes in the R+ dataset
+Rplus(1:knx,2:2:end,:,:) = Rplus(knx:-1:1,2:2:end,:,:);
+
+%% 2. FT along the read dimension
+for z=1:knz
+    for y=1:kny
+        fftRplus(:,y,z) = fftshift(ifft(Rplus(:,y,z)));
+    end
+end
+z=4;
+figure('Name','Rplus')
+subplot(1,2,1); imagesc(abs(fftRplus(:,:,z))); title('abs fftRplus')
+subplot(1,2,2); imagesc(angle(fftRplus(:,:,z))); title('abs fftRplus')
+
+%% 3. Generate the nonlinear phase map, P+
+Pplus = angle(fftRplus);  
+
+%% 4. Reverse the odd echoes in the R- dataset
+Rminus(1:knx,1:2:end-1,:,:) = Rminus(knx:-1:1,1:2:end-1,:,:);
+
+%% 5. FT along the read dimension
+for z=1:knz
+    for y=1:kny
+        fftRminus(:,y,z) = fftshift(ifft(Rminus(:,y,z)));
+    end
+end
+z=4;
+figure('Name','Rminus')
+subplot(1,2,1); imagesc(abs(fftRminus(:,:,z))); title('abs fftRminus')
+subplot(1,2,2); imagesc(angle(fftRminus(:,:,z))); title('abs fftRminus')
+
+%% 6. Generate the nonlinear phase map, P-
+Pminus = angle(fftRminus);     
+
+%% 7. Phase correct the phase-encoded reference data, E-, using P- to give E*-
+Eminus(1:knx,1:2:end-1,:,:) = Eminus(knx:-1:1,1:2:end-1,:,:);
+for t=1:nt
+    for z=1:knz
+        for y=1:kny
+            fftEminus(:,y,z,t) = fftshift(ifft(Eminus(:,y,z,t)));
+        end
+    end
+end
+Estarminusangle = angle(fftEminus) - repmat(Pminus,[1 1 1 size(fftEminus,4)])*1i;
+a = real(abs(fftEminus).*cos(Estarminusangle));
+b = real(abs(fftEminus).*sin(Estarminusangle));
+Estarminus = complex(a,b);
+
+%% 8. Reverse the even echoes in the EPI dataset, E+
+Eplus(1:knx,2:2:end,:,:) = Eplus(knx:-1:1,2:2:end,:,:);
+
+%% 9. FT along the read dimension
+for t=1:nt
+    for z=1:knz
+        for y=1:kny
+            fftEplus(:,y,z,t) = fftshift(ifft(Eplus(:,y,z,t)));
+        end
+    end
+end
+t=nt; z=4;
+figure('Name','Eplus')
+subplot(1,2,1); imagesc(abs(Eplus(:,:,z,t))); title('Eplus')
+subplot(1,2,2); imagesc(abs(fftEplus(:,:,z,t))); title('fftEplus')
+
+%% 10. Phase correct the EPI data using P+, to give E*+
+Estarplusphase = angle(fftEplus) - repmat(Pplus,[1 1 1 size(fftEplus,4)])*1i;
+a = real(abs(fftEplus).*cos(Estarplusphase));
+b = real(abs(fftEplus).*sin(Estarplusphase));
+Estarplus = complex(a,b);
+
+%% 11. Apply the odd/even echo correction by complex addition of E*- and E*+
+E = Estarminus + Estarplus;
+z=4; t=4;
+figure
+subplot(1,3,1); imagesc(imag(Estarminus(:,:,z,t))); title('Estarminus') 
+subplot(1,3,2); imagesc(imag(Estarplus(:,:,z,t))); title('Estarplus') 
+subplot(1,3,3); imagesc(imag(E(:,:,z,t))); title('E') 
+
+%% 12. Apply the FT along the phase encode direction
+for t=1:nt
+    for z=1:knz
+        for x=1:knx
+            fftE(x,:,z,t) = fftshift(ifft(E(x,3:end,z,t)));
+        end
+    end
+end
+%% 13 Display the magnitude image
+t=4; z=4;
+figure('Name','E')
+subplot(1,2,1); imagesc(abs(E(:,:,z,t))); title('E')
+subplot(1,2,2); imagesc(abs(fftE(:,:,z,t))); title('fftE')
+
+%% Display data_fdf and rspace
+t=4;
+figure(5)
+for z=2:5
+    subplot(2,4,(z-1)); imagesc(data_fdf(:,:,z,t)); axis image; title(['fdf z=' num2str(z)],'fontsize',12);
+    subplot(2,4,(z+3)); imagesc(fftE(knx/4:3*knx/4,:,z,t)); axis image; title(['xcorr z=' num2str(z)],'fontsize',12);
+    colormap gray
+end
+
+
+
