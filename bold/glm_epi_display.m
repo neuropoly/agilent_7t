@@ -63,7 +63,7 @@ colormap(cmap);
 [~, name, ext] = fileparts(param.foldername);
 fname = fullfile(output,[name ext '_GLM']);
 print(h, '-dpng', [fname '.png'], '-r300');
-saveas(h,fname,'fig')
+saveas(h,fname,'png')
 
 %     close(h)
 

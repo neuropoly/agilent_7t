@@ -4,6 +4,9 @@ function [h] = display_function(varargin)
 % subplots.
 
 % input:
+% structure containing numerous 3d/4d images (ex: different
+% reconstructions). fieldnames will be used for the legend
+% OR
 % first input: 1st line to display
 % second input: 2nd line to display
 % ...
@@ -12,8 +15,6 @@ function [h] = display_function(varargin)
 % (n+2) input: 2nd line legend
 % ...
 % (2*n)th input: nth line legend
-% OR
-% structure containing all the data
 
 %% Data and parameter extraction
 nb_data=0;

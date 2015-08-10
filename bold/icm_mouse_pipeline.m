@@ -134,14 +134,14 @@ save_bold_quality_stats(pp_quality_stats,output,param,'pp');
 %% Step 4: Run GLM
 spm_jobman('initcfg');
 disp('processing GLM')
-try
+% try
     param = icm_spm_mouse(output,param);
     Vb = spm_vol(fullfile(param.pathStat,'spmT_0001.img'));
     tmap = spm_read_vols(Vb);
     glm_epi_display(rspace_sr,tmap,output,param)
-catch
-    disp('error processing GLM')
-end
+% catch
+%     disp('error processing GLM')
+% end
 
 output_matlab = [output filesep 'analysis.mat'];
 save(output_matlab)
