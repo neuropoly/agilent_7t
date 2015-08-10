@@ -217,7 +217,7 @@ param.(param_fields{4}) = 180;
 icm_mouse_pipeline(input,output,param);
 
 %% s_20150716_MouseBold07
-xp_folder = '/Volumes/Usagers/Etudiants/jepelh/data_server/s_20150716_VarianMouse_JF_102';
+xp_folder = '/Volumes/jepelh/data_server/s_20150716_MouseBold07';
 input = [xp_folder filesep 'fsems_JF_01.img'];
 output = [input date '_analysis'];
 param.(param_fields{1}) = 180;
