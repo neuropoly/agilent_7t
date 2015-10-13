@@ -47,9 +47,9 @@ for i_folder=1:nb_folders
             errordlg(['unable to open ' input_file])
         end
         data = DATA.FTDATA';
-        xres = DATA.HDR.FileHeader.roi(1)/DATA.HDR.FileHeader.matrix(1);
-        yres = DATA.HDR.FileHeader.roi(2)/DATA.HDR.FileHeader.matrix(2);
-        zres = DATA.HDR.FileHeader.roi(3);
+        xres = DATA.HDR.FileHeader.roi(1)*10/DATA.HDR.FileHeader.matrix(1);
+        yres = DATA.HDR.FileHeader.roi(2)*10/DATA.HDR.FileHeader.matrix(2);
+        zres = DATA.HDR.FileHeader.roi(3)/100;
         res = [xres yres zres];
         [pathstr, name, ext] = fileparts(input_file);
         
