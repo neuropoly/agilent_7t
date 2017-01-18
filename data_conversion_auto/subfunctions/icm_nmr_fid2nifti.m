@@ -11,7 +11,7 @@ cd(fid_folders{i_folder})
 data=aedes_readfid('fid','Return',2);
 ks=abs(data.KSPACE);
 ks4d(:,:,1,:)=ks;
-save_avw_v2(mean(ks4d(:,16,1,:),1),[output strrep(fid_folders{i_folder},'.fid','')],'f',[1 1 1 3])
+save_nii(make_nii(mean(ks4d(:,16,1,:),1),[1 1 1 3]),[output strrep(fid_folders{i_folder},'.fid','.nii')])
 cd ..
 clear ks4d
 end

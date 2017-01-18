@@ -145,7 +145,7 @@ end
 % Write TSNR
 j_disp(fname_log,['\n\nWrite TSNR...'])
 tsnr3d = reshape(tsnr,nx,ny,nz);
-save_avw(tsnr3d,fname_tsnr,'s',scales);
+save_nii(make_nii(tsnr3d,scales),[fname_tsnr '.nii'])
 j_disp(fname_log,['.. File created: ',fname_tsnr])
 
 % Copy geometry information

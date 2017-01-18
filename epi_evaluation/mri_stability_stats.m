@@ -42,7 +42,7 @@ mean_voxel = mean(data,4);
 
 % Save the averaged data
 if save_do
-    save_avw(mean_voxel,'mean_volume','s',scales);
+    save_nii(make_nii(mean_voxel,scales),'mean_volume.nii');
 end
 
 global_mean = mean(mean(mean(mean(data,1),2),3),4);
@@ -50,7 +50,7 @@ stats.mask = mean_voxel>global_mean;
 stats.mask = repmat(stats.mask,[1 1 1 nt]);
 masked_data = data.*stats.mask;
 if save_do
-    save_avw(masked_data,'mask','s',scales);
+    save_nii(make_nii(masked_data,scales),'mask.nii');
 end
 mean_voxel = mean(masked_data,4);
 if mask_do

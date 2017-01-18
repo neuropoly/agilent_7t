@@ -9,7 +9,8 @@ Fmean=imresize(Fmean,[A.dims(1) A.dims(2)]);
 
 [pathfile,~,~] = fileparts(F.file); 
 Fmeanfile = fullfile(pathfile,'meansrv4d');
-save_avw(Fmean,Fmeanfile,'s',A.scales);
+save_nii(make_nii(Fmean,scales),[Fmeanfile '.nii']);
+
 
 A.img = A.img/max(max(max(max(A.img))));
 Fmean = Fmean/max(max(max(max(Fmean))));
