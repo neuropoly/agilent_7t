@@ -1,12 +1,12 @@
 function icm_procpar2bvec_file(folders)
 % icm_procpar2bvec_file('mems*')
 % read procpar in .fid folders and put it in .nii folder
-currentdir = cd;
-cd(fileparts(folders))
+currentdir = pwd;
 
 diff_fid_folders=dir([folders '.fid']);
 diff_fid_folders=diff_fid_folders(cellfun(@(x) x~=0,{diff_fid_folders(:).isdir}));
 
+cd(fileparts(folders))
 
 
 nb_folders=size(diff_fid_folders,1);
