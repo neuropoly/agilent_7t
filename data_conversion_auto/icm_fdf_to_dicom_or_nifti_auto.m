@@ -69,7 +69,7 @@ for i_folder=1:nb_folders
                 files2merge{k}= [name '.nii'];
                 disp(['writing ' output_file{k}])
                 try
-                    save_avw(data,output_file{k},'f',res);
+                    save_nii(make_nii(data,res),output_file{k})
                 catch exception
                     errordlg(['unable to write ' output_file{k}])
                 end
@@ -85,7 +85,7 @@ for i_folder=1:nb_folders
                 output_file{k} = fullfile(pathstr,[name '.nii']);
                 disp(['writing ' output_file{k}])
                 try
-                    save_avw(data,output_file{k},'f',res);
+                    save_nii(make_nii(data,res),output_file{k})
                 catch exception
                     errordlg(['unable to write ' output_file{k}])
                 end
