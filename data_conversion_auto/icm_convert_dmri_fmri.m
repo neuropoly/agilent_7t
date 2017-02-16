@@ -6,7 +6,10 @@ function icm_convert_dmri_fmri(input_folders,output_folder,recon,param)
 % icm_convert_dmri_fmri('home/s_2014021202_Julien3/epip_diff_qspace_D*','./')
 % icm_convert_dmri_fmri('home/s_2014021202_Julien3/epip_diff_qspace_D*','./',5)
 %
-dbstop if error
+
+if nargin<2
+    help icm_convert_dmri_fmri
+end
 
 % convert to nifti
 if nargin<3
