@@ -90,7 +90,7 @@ end
 
 %% Read whole file into cell array
 try
-  C = textscan(fid,'%s','delimiter','\n','BufSize',1024*1024);
+  C = textscan(fid,'%s','delimiter','\n');
   procpar_str=C{1};
 catch
   msg={'Error while reading procpar file.','',...
