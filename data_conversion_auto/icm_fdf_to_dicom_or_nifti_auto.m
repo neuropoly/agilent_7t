@@ -4,7 +4,7 @@ function icm_fdf_to_dicom_or_nifti_auto(folders)
 
 % This script converts one or many .FDF MRI data to a DICOM and/or Nifti format
 %% Initialization
-dbstop if error
+
 output_format = 'nifti';    % Desired output format ('dicom' or 'nifti' or 'both')
 % protocol_path=[cd '/'];  % Path to the protocol folder, with all .fid and .img folders
 % list=dir('*.img');
