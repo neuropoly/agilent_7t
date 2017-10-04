@@ -15,8 +15,7 @@ function organizeqmr(copytype,datafolder)
 
 for ff = 1:2:length(copytype) % loop over folders
     if exist(['.' filesep copytype{ff}],'dir'), disp(['Folder ' copytype{ff} 'already exist. Skipping... (delete manually directory)']); continue; end
-    mkdir(copytype{ff})
-    cd(copytype{ff})
+    NewPath = ManageParentFolder(destfolder, copytype{ff});
     if max(strcmp(copytype{ff+1},'keyword'))
         %% I- PARSE INPUTS
         p=inputParser;
@@ -43,7 +42,7 @@ for ff = 1:2:length(copytype) % loop over folders
         list = list(cellfun(@isempty,strfind(list,'_Gibbs.nii'))); % remove _Gibbs
         list = list(cellfun(@isempty,strfind(list,'_phase.nii'))); % remove _phase
         list = list(cellfun(@isempty,strfind(list,'_pointwise'))); % remove _pointwise
-        if isempty(list), disp(['no files associated with keyword ' in.keyword]); cd ..; delete(copytype{ff}); continue; end
+        if isempty(list), msgbox(['no files associated with keyword ' in.keyword]); cd ..; delete(copytype{ff}); continue; end
         
         
         %% III- LOOP OVER FILES, OPEN FIGURE, LOAD DATA AND DISPLAY
@@ -125,7 +124,7 @@ for ff = 1:2:length(copytype) % loop over folders
         if in.phase
             datph=[];
             for iv=find(hcheck), datph =cat(4,datph,load_nii_data(strrep(list{iv},'.nii.gz','_phase.nii.gz'))); end
-            save_nii_v2(datph,[copytype{ff} '_phase.nii.gz'],list{find(hcheck,1,'first')})
+            save_nii_v2(datph,[NewPath '_phase.nii.gz'],list{find(hcheck,1,'first')})
         end
         
         
@@ -133,7 +132,7 @@ for ff = 1:2:length(copytype) % loop over folders
         if in.Gibbs, dat = unring(dat); suffix = [suffix '_Gibbs']; end
         
         %% SAVE NIFTI
-        save_nii_v2(dat,[copytype{ff} suffix '.nii.gz'],list{find(hcheck,1,'first')})
+        save_nii_v2(dat,[NewPath suffix '.nii.gz'],list{find(hcheck,1,'first')})
         
         %% todo postprocessing
         
@@ -141,6 +140,17 @@ for ff = 1:2:length(copytype) % loop over folders
         %% LAUNCH organizeqmr IN SUBFOLDER
         organizeqmr(copytype{ff+1},datafolder)
     end
-    
-    cd ..
 end
+
+
+%--------------------------------------------------------------------------
+% ManageParentFolder
+%   Create folder (subfolder) under the parent folder (destfolder)
+function NewPath = ManageParentFolder(destfolder, subfolder)
+   % Manage parent folder 
+   if destfolder 
+       NewPath = [destfolder filesep char(subfolder)];
+   else
+       NewPath = subfolder;
+   end
+   mkdir(NewPath)
