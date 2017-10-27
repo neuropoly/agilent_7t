@@ -22,7 +22,7 @@ function varargout = UIOrganizeMR(varargin)
 
 % Edit the above text to modify the response to help UIOrganizeMR
 
-% Last Modified by GUIDE v2.5 03-Oct-2017 12:57:58
+% Last Modified by GUIDE v2.5 27-Oct-2017 14:21:15
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -339,3 +339,257 @@ if ~isempty(data.StudyDate)
     TopProj = [TopProj '/' data.StudyDate];
 end
 h.String = ['Folder Structure: ' TopProj];
+
+%--------------------------------------------------------------------------
+% B1 map - Double Angle Method
+%--------------------------------------------------------------------------
+% --- Executes on button press in B1MapButton.
+function B1MapButton_Callback(hObject, eventdata, handles)
+dataGUI = guidata(hObject);
+
+% only proceed if source and destination exist
+% TO DO 
+
+% look for required files under the source directory
+FilesNFolders = dir(dataGUI.SourceDirectory);
+Files = FilesNFolders(~([FilesNFolders.isdir]));
+
+Dim = size(Files);
+NbFiles = Dim(1);
+
+LI = [];
+for k=1:NbFiles
+    if strfind(Files(k).name, 'B1')
+        if strfind(Files(k).name, '.nii')
+            % Load images
+            FullFile = [dataGUI.SourceDirectory, '/', Files(k).name];
+            SFImages = load_nii_data(FullFile);
+            file = struct;
+            file.SF60 = FullFile;
+            file.SF120 = FullFile;
+            
+            data.SF60  = double(SFImages(:,:,1,1));
+            data.SF120 = double(SFImages(:,:,1,2));
+            
+            % create B1 map (qMRLab)
+            load('B1_DAMParameters.mat');
+            %qMRLab(Model,file);            
+            FitResults = FitData(data,Model,1);
+            
+            % save results
+            B1Dir = [dataGUI.DestinationDirectory, '/B1map_results'];
+            mkdir(B1Dir);
+            FitResultsSave_nii(FitResults, FullFile, B1Dir);
+        end
+    end     
+end
+ 
+guidata(hObject, dataGUI);
+
+
+%--------------------------------------------------------------------------
+% B0 map - Dual Echo Method
+%--------------------------------------------------------------------------
+% --- Executes on button press in B0MapButton.
+function B0MapButton_Callback(hObject, eventdata, handles)
+dataGUI = guidata(hObject);
+
+% look for required files under the source directory
+FilesNFolders = dir(dataGUI.SourceDirectory);
+Files = FilesNFolders(~([FilesNFolders.isdir]));
+
+Dim = size(Files);
+NbFiles = Dim(1);
+
+LI = [];
+for k=1:NbFiles
+    if strfind(Files(k).name, 'B0')
+        if strfind(Files(k).name, '.nii')
+            % Load images
+            FullFile = [dataGUI.SourceDirectory, '/', Files(k).name];
+            PMImages = load_nii_data(FullFile);
+            file = struct;
+            file.Phase = FullFile;
+            file.Magn = FullFile;
+            
+            % This has to be fixed
+            % TO DO
+            data.Phase = (real(fft(double(PMImages(:,:,1,[1:2])))));
+            data.Magn  = (angle(fft(double(PMImages(:,:,1,[1:2])))));
+
+            % create B0 map (qMRLab)
+            Model = B0_DEM;
+            qMRLab(Model,file); 
+            load([dataGUI.SourceDirectory, '/B0_DEMParameters.mat']);
+            dTE = param.te2 - param.te1; 
+            Model.Prot.Time.Mat = dTE;
+            FitResults = FitData(data,Model,1);
+            
+            % save results
+            % B0Dir
+            B0Dir = [dataGUI.DestinationDirectory, '/B0map_results'];
+            mkdir(B0Dir);
+            FitResultsSave_nii(FitResults, FullFile, B0Dir);
+        end
+    end     
+end
+ 
+guidata(hObject, dataGUI);
+
+%--------------------------------------------------------------------------
+% T1-map - Variable Flip Angle Method
+%--------------------------------------------------------------------------
+% --- Executes on button press in T1map_VFA_Button.
+function T1map_VFA_Button_Callback(hObject, eventdata, handles)
+% TO DO
+
+
+
+%--------------------------------------------------------------------------
+% T1-map - Inversion Recovery Method
+%--------------------------------------------------------------------------
+% --- Executes on button press in T1map_IR_Button.
+function T1map_IR_Button_Callback(hObject, eventdata, handles)
+dataGUI = guidata(hObject);
+
+% look for required files under the source directory
+FilesNFolders = dir(dataGUI.SourceDirectory);
+Files = FilesNFolders(~([FilesNFolders.isdir]));
+
+Dim = size(Files);
+NbFiles = Dim(1);
+
+LI = [];
+for k=1:NbFiles
+    if strfind(Files(k).name, 'IR')
+        if strfind(Files(k).name, '.nii')
+            % Load images
+            FullFile = [dataGUI.SourceDirectory, '/', Files(k).name];            
+            data = struct;
+            data.IRData = load_nii_data(FullFile);
+           
+            % create T1-map (qMRLab)
+            Model = InversionRecovery; % initial model
+            load([dataGUI.SourceDirectory, '/T1_IR_Parameters.mat']); % get specific parameters from file
+            Model.Prot.IRData.Mat = param.ti;
+            
+            voxel = [70 60]; % plot fit in one voxel
+            datavox.IRData = squeeze(data.IRData(voxel(1),voxel(2),:,:));
+            FitResults = Model.fit(datavox);
+            
+            figure
+            Model.plotmodel(FitResults,datavox);
+            FitResults = FitData(data,Model);
+            
+            % save results
+            T1Dir = [dataGUI.DestinationDirectory, '/T1map_results'];
+            mkdir(T1Dir);
+            FitResultsSave_nii(FitResults, FullFile, T1Dir);
+        end
+    end     
+end
+ 
+guidata(hObject, dataGUI);
+
+%--------------------------------------------------------------------------
+% MWF - Myelin Water Fraction with MET2 images
+%--------------------------------------------------------------------------
+% --- Executes on button press in MWF_Button.
+function MWF_Button_Callback(hObject, eventdata, handles)
+dataGUI = guidata(hObject);
+
+% look for required files under the source directory
+FilesNFolders = dir(dataGUI.SourceDirectory);
+Files = FilesNFolders(~([FilesNFolders.isdir]));
+
+Dim = size(Files);
+NbFiles = Dim(1);
+
+LI = [];
+for k=1:NbFiles
+    if strfind(Files(k).name, 'MWF')
+        if strfind(Files(k).name, '.nii')
+            % Load images
+            FullFile = [dataGUI.SourceDirectory, '/', Files(k).name];            
+            data = struct;
+            data.MET2data = load_nii_data(FullFile);
+            
+            % for now create mask for all image, use real mask later on
+            % TO DO
+            
+            data.Mask = (data.MET2data(:,:,1,1)./data.MET2data(:,:,1,1)); 
+           
+            % create T1-map (qMRLab)
+            Model = MWF; % initial model
+            load([dataGUI.SourceDirectory, '/MWF_Parameters.mat']); % get specific parameters from file
+                        
+            Model.Prot.Echo.Mat = proc.TE; % number of echoes = proc.ne
+            
+            FitResults = FitData(data,Model,1);
+            
+            figure % verify fit in figure
+            voxel           = [37, 40, 1];
+            FitResultsVox   = extractvoxel(FitResults,voxel,FitResults.fields);
+            dataVox         = extractvoxel(data,voxel);
+            Model.plotmodel(FitResultsVox,dataVox)
+            
+            % save results
+            MWFDir = [dataGUI.DestinationDirectory, '/MWF_results'];
+            mkdir(MWFDir);
+            FitResultsSave_nii(FitResults, FullFile, MWFDir);
+        end
+    end     
+end
+ 
+guidata(hObject, dataGUI);
+
+
+% --- Executes on button press in MTV_Button.
+function MTV_Button_Callback(hObject, eventdata, handles)
+dataGUI = guidata(hObject);
+
+% look for required files under the source directory
+FilesNFolders = dir(dataGUI.SourceDirectory);
+Files = FilesNFolders(~([FilesNFolders.isdir]));
+
+Dim = size(Files);
+NbFiles = Dim(1);
+
+LI = [];
+for k=1:NbFiles
+    if strfind(Files(k).name, 'MTV')
+        if strfind(Files(k).name, '.nii')
+            % Load images
+            FullFile = [dataGUI.SourceDirectory, '/', Files(k).name];  
+            
+            % Do not execute if B1 folder does not exist. B1 map should be
+            % processed prior to MTV execution
+            % TO DO
+            load([dataGUI.SourceDirectory, '/Processed/B1map_results/FitResults.mat']);
+            data.B1map = double(B1map);
+
+% NOTE: CSF mask should be drawn around the water phantom that will be created and present during scans.       
+%             load('CSFMask.mat');
+%             data.CSFMask = double(CSFMask);
+            
+%             load([dataGUI.SourceDirectory, '/SPGR.mat']);
+%             data.SPGR    = double(SPGR);
+            
+            % create T1-map (qMRLab)
+            Model = MTV;
+            load([dataGUI.SourceDirectory, '/MTV_Parameters.mat']); % get specific parameters from file
+            FlipAngle = proc.fliplist;
+            TR        = param.tr * ones(length(FlipAngle),1);
+            Model.Prot.MTV.Mat = [ FlipAngle , TR ];
+
+            FitResults       = FitData(data,Model);
+            
+            % save results
+            MTVDir = [dataGUI.DestinationDirectory, '/MTV_results'];
+            mkdir(MTVDir);
+            FitResultsSave_nii(FitResults, FullFile, MTVDir);
+        end
+    end     
+end
+ 
+guidata(hObject, dataGUI);
