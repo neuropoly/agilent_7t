@@ -1,4 +1,4 @@
-function organizeqmr(copytype,datafolder)
+function organizeqmr(copytype,datafolder,destfolder)
 % Organize qMR data from agilent mri and merge them
 % Let you preview and choose data you want
 % extract desire parameters from proc par
@@ -12,6 +12,7 @@ function organizeqmr(copytype,datafolder)
 %            };
 %
 % todo: add postprocessing (e.g. moco)
+if nargin<3, destfolder = pwd; end
 
 for ff = 1:2:length(copytype) % loop over folders
     if exist(['.' filesep copytype{ff}],'dir'), disp(['Folder ' copytype{ff} 'already exist. Skipping... (delete manually directory)']); continue; end
@@ -37,12 +38,13 @@ for ff = 1:2:length(copytype) % loop over folders
             scheme = ~cellfun(@isempty,strfind(procname,'scheme'));
             if max(scheme), procname=procname(~scheme); scheme=true; else scheme=false; end
         end
-        %% II- LIST NIFTI FILES
+        %% II- LIST NIFTI FILES AND REMOVE PROCESSED FILES
         list= sct_tools_ls(fullfile(datafolder,[in.keyword '.nii.gz']),1,1);
         list = list(cellfun(@isempty,strfind(list,'_Gibbs.nii'))); % remove _Gibbs
         list = list(cellfun(@isempty,strfind(list,'_phase.nii'))); % remove _phase
+        list = list(cellfun(@isempty,strfind(list,'_PH.nii'))); % remove scanned phase (duplicated with _phase)
         list = list(cellfun(@isempty,strfind(list,'_pointwise'))); % remove _pointwise
-        if isempty(list), msgbox(['no files associated with keyword ' in.keyword]); cd ..; delete(copytype{ff}); continue; end
+        if isempty(list), msgbox(['no files associated with keyword ' in.keyword]); delete(copytype{ff}); continue; end
         
         
         %% III- LOOP OVER FILES, OPEN FIGURE, LOAD DATA AND DISPLAY
@@ -58,8 +60,8 @@ for ff = 1:2:length(copytype) % loop over folders
                 paramfile  = strrep(list{ll},'.nii.gz','_param.mat');
                 paramll = load(paramfile,'proc');
                 paramll = paramll.proc;
-                save param -struct paramll
-                param(ll) = load('param',procname{:});
+                save('param_tmp','-struct', 'paramll')
+                param(ll) = load('param_tmp',procname{:});
                 %            elseif exist(strrep(list{ll},'.nii.gz','_param.scheme'),2)
                 %                txt2mat()
             else
@@ -111,7 +113,7 @@ for ff = 1:2:length(copytype) % loop over folders
                 end
             end
             
-            save param -struct paramMerged
+            save([NewPath filesep  'param'], '-struct', 'paramMerged')
             clear paramMerged
             if scheme
                 schemefilelist = strrep(list(~~hcheck),'.nii.gz','.scheme')';
@@ -124,7 +126,7 @@ for ff = 1:2:length(copytype) % loop over folders
         if in.phase
             datph=[];
             for iv=find(hcheck), datph =cat(4,datph,load_nii_data(strrep(list{iv},'.nii.gz','_phase.nii.gz'))); end
-            save_nii_v2(datph,[NewPath '_phase.nii.gz'],list{find(hcheck,1,'first')})
+            save_nii_v2(datph,[NewPath filesep copytype{ff} '_phase.nii.gz'],list{find(hcheck,1,'first')})
         end
         
         
@@ -132,25 +134,21 @@ for ff = 1:2:length(copytype) % loop over folders
         if in.Gibbs, dat = unring(dat); suffix = [suffix '_Gibbs']; end
         
         %% SAVE NIFTI
-        save_nii_v2(dat,[NewPath suffix '.nii.gz'],list{find(hcheck,1,'first')})
+        save_nii_v2(dat,[NewPath filesep copytype{ff} suffix '.nii.gz'],list{find(hcheck,1,'first')})
         
         %% todo postprocessing
         
     else
         %% LAUNCH organizeqmr IN SUBFOLDER
-        organizeqmr(copytype{ff+1},datafolder)
+        organizeqmr(copytype{ff+1},datafolder,NewPath)
     end
 end
 
-
+delete param_tmp
 %--------------------------------------------------------------------------
 % ManageParentFolder
 %   Create folder (subfolder) under the parent folder (destfolder)
 function NewPath = ManageParentFolder(destfolder, subfolder)
    % Manage parent folder 
-   if destfolder 
-       NewPath = [destfolder filesep char(subfolder)];
-   else
-       NewPath = subfolder;
-   end
+   NewPath = [destfolder filesep char(subfolder)];
    mkdir(NewPath)

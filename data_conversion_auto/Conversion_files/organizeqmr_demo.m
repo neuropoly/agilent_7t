@@ -1,9 +1,6 @@
-animal = 'Rat'
-region = 'CC'
-date   = '20170718'
-datafolder = '/Users/taduv_admin/data/test2/s_20170821_Pascal_Lea';
-%%
-%%-------------------------------------------------------------------------
+%% DEPENDENCIES
+% unring.m : https://bitbucket.org/reisert/unring
+%% CONFIGURE
 %%-------------------------------------------------------------------------
 % FORMAT: {'FOLDER',{'SUBFOLDER',{'keyword','value','param','value/rename'},'SUBFOLDER',{'keyword','value','param','value'}},{'keyword','value','param','value'},...}
 copytype = {'qMT',{'SIRFSE',{'keyword','*sirfse*'       ,'param',{'ti'}},...
@@ -26,17 +23,17 @@ copytype = {'qMT',{'SIRFSE',{'keyword','*sirfse*'       ,'param',{'ti'}},...
                   },...
            };
 
-%%
-%%-------------------------------------------------------------------------
-% create folder
+%% CREATE OUTPUT FOLDER AND CD TO THIS DIRECTORY
+animal = 'Rat'
 mkdir(animal)
 cd(animal)
+region = 'CC'
 mkdir(region)
 cd(region)
+date   = '20170718'
 mkdir(date)
 cd(date)
 
-% organize
+%% ORGANIZE IN CURRENT FOLDER
+datafolder = '~/data/ICM/s_20171130_TEST_RESCAN';
 organizeqmr(copytype,datafolder)
-
-cd ../../../
